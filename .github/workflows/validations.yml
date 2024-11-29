@@ -7,11 +7,12 @@ on:
 
 jobs:
   lint:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run SwiftLintst
-        run: swiftlint lint --reporter github-actions-logging
+      - name: GitHub Action for SwiftLint with --reporter
+        uses: norio-nomura/action-swiftlint@3.2.1
+        args: --reporter github-actions-logging
 
   danger:
     runs-on: ubuntu-latest
