@@ -83,11 +83,16 @@ jobs:
             -framework build/appletvsimulator-build/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
             -output build/XCFramework/SkeletonView.xcframework
 
-      - name: Upload XCFramework
+      - name: Compress XCFramework
+        run: |
+          cd build/XCFramework
+          zip -r SkeletonView.xcframework.zip SkeletonView.xcframework
+
+      - name: Upload XCFramework to Release
         uses: actions/upload-artifact@v3
         with:
-          name: SkeletonView-XCFramework
-          path: build/XCFramework/SkeletonView.xcframework
+          name: SkeletonView-XCFramework-Zip
+          path: build/XCFramework/SkeletonView.xcframework.zip
 
   release_version:
     name: Release Version
@@ -97,10 +102,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download XCFramework
+      - name: Download XCFramework ZIP
         uses: actions/download-artifact@v3
         with:
-          name: SkeletonView-XCFramework
+          name: SkeletonView-XCFramework-Zip
 
       - name: Publish release
         id: publish_release
@@ -110,9 +115,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload XCFramework to GitHub Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: build/XCFramework/SkeletonView.xcframework.zip
+          asset_name: SkeletonView.xcframework.zip
+          asset_content_type: application/zip
+
       - name: Update podspec with XCFramework
         run: |
           sed -i '' 's|vendored_frameworks = .*|vendored_frameworks = "build/XCFramework/SkeletonView.xcframework"|' SkeletonView.podspec
+          sed -i '' 's|source = .*|{ :http => "https://github.com/Juanpe/SkeletonView/releases/download/${{ steps.publish_release.outputs.tag_name }}/SkeletonView.xcframework.zip" }|' SkeletonView.podspec
 
       - name: Update version in podspec
         run: fastlane bump_version next_version:${{ steps.publish_release.outputs.tag_name }}
