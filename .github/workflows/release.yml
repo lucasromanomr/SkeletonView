@@ -2,10 +2,99 @@ name: Release
 on: [workflow_dispatch]
 
 jobs:
-  release_version:
-    runs-on: macOS-latest
+  build:
+    name: Build XCFramework for Multiple Platforms
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        build-config:
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS",
+              sdk: "iphoneos",
+              archive_path: "build/Release-iphoneos",
+            }
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS Simulator",
+              sdk: "iphonesimulator",
+              archive_path: "build/Release-iphonesimulator",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS",
+              sdk: "appletvos",
+              archive_path: "build/Release-appletvos",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS Simulator",
+              sdk: "appletvsimulator",
+              archive_path: "build/Release-appletvsimulator",
+            }
+
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build framework
+        run: |
+          xcodebuild archive \
+            -scheme "${{ matrix.build-config.scheme }}" \
+            -destination "${{ matrix.build-config.destination }}" \
+            -sdk "${{ matrix.build-config.sdk }}" \
+            -archivePath "${{ matrix.build-config.archive_path }}/SkeletonView.xcarchive" \
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+
+  create-xcframework:
+    name: Create XCFramework
+    needs: build
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Create XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -framework build/Release-iphoneos/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/Release-iphonesimulator/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/Release-appletvos/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/Release-appletvsimulator/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -output build/XCFramework/SkeletonView.xcframework
+
+      - name: Verify XCFramework
+        run: |
+          if [ -d "build/XCFramework/SkeletonView.xcframework" ]; then
+            echo "XCFramework generated successfully."
+          else
+            echo "Failed to generate XCFramework." && exit 1
+          fi
+
+      - name: Upload XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkeletonView-XCFramework
+          path: build/XCFramework/SkeletonView.xcframework
+
+  release_version:
+    name: Release Version
+    needs: create-xcframework
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download XCFramework
+        uses: actions/download-artifact@v3
+        with:
+          name: SkeletonView-XCFramework
 
       - name: Publish release
         id: publish_release
@@ -15,7 +104,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update podspec
+      - name: Update podspec with XCFramework
+        run: |
+          sed -i '' 's|vendored_frameworks = .*|vendored_frameworks = "build/XCFramework/SkeletonView.xcframework"|' SkeletonView.podspec
+
+      - name: Update version in podspec
         run: fastlane bump_version next_version:${{ steps.publish_release.outputs.tag_name }}
 
       - name: Commit changes
@@ -26,7 +119,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to Cocoapods
+      - name: Deploy to CocoaPods
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
