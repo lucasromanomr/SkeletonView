@@ -9,10 +9,10 @@ jobs:
     name: Apply Needs Attention Label
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Apply Needs Attention Label
         uses: hramos/needs-attention@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          response-required-label: 'awaiting user info'
-          needs-attention-label: 'needs triage'
+          response-required-label: "awaiting user info"
+          needs-attention-label: "needs triage"
