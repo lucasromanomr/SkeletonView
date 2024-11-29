@@ -1,21 +1,173 @@
-name: Release
-on: [workflow_dispatch]
+name: CD
+
+on:
+  workflow_dispatch:
+  pull_request_target:
+    branches: [main]
+    types: [closed]
 
 jobs:
-  release_version:
-    runs-on: macOS-latest
+  build:
+    name: Build XCFramework
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        build-config:
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS",
+              sdk: "iphoneos",
+              mach_o_type: "mh_dylib",
+              archive_path: "build/Release-iphoneos/Dynamic",
+            }
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS Simulator",
+              sdk: "iphonesimulator",
+              mach_o_type: "mh_dylib",
+              archive_path: "build/Release-iphonesimulator/Dynamic",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS",
+              sdk: "appletvos",
+              mach_o_type: "mh_dylib",
+              archive_path: "build/Release-appletvos/Dynamic",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS Simulator",
+              sdk: "appletvsimulator",
+              mach_o_type: "mh_dylib",
+              archive_path: "build/Release-appletvsimulator/Dynamic",
+            }
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS",
+              sdk: "iphoneos",
+              mach_o_type: "staticlib",
+              archive_path: "build/Release-iphoneos/Static",
+            }
+          - {
+              scheme: "SkeletonView iOS",
+              destination: "generic/platform=iOS Simulator",
+              sdk: "iphonesimulator",
+              mach_o_type: "staticlib",
+              archive_path: "build/Release-iphonesimulator/Static",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS",
+              sdk: "appletvos",
+              mach_o_type: "staticlib",
+              archive_path: "build/Release-appletvos/Static",
+            }
+          - {
+              scheme: "SkeletonView tvOS",
+              destination: "generic/platform=tvOS Simulator",
+              sdk: "appletvsimulator",
+              mach_o_type: "staticlib",
+              archive_path: "build/Release-appletvsimulator/Static",
+            }
+
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build framework
+        run: |
+          xcodebuild archive \
+            -scheme "${{ matrix.build-config.scheme }}" \
+            -destination "${{ matrix.build-config.destination }}" \
+            -configuration "Release" \
+            -sdk "${{ matrix.build-config.sdk }}" \
+            -archivePath "${{ matrix.build-config.archive_path }}/SkeletonView.xcarchive" \
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            MACH_O_TYPE=${{ matrix.build-config.mach_o_type }}
+
+      - name: Upload archive as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.build-config.sdk }}-build-${{ matrix.build-config.mach_o_type }}
+          path: ${{ matrix.build-config.archive_path }}
+
+  create-xcframework:
+    name: Create XCFramework
+    needs: build
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: build/
+
+      - name: Verify downloaded artifacts
+        run: ls -R build/
+
+      - name: Create Static XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -framework build/iphoneos-build-staticlib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/iphonesimulator-build-staticlib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/appletvos-build-staticlib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/appletvsimulator-build-staticlib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -output build/XCFramework/SkeletonViewStatic.xcframework
+
+      - name: Create Dynamic XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -framework build/iphoneos-build-mh_dylib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/iphonesimulator-build-mh_dylib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/appletvos-build-mh_dylib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -framework build/appletvsimulator-build-mh_dylib/SkeletonView.xcarchive/Products/Library/Frameworks/SkeletonView.framework \
+            -output build/XCFramework/SkeletonViewDynamic.xcframework
+
+      - name: Compress XCFrameworks
+        run: |
+          cd build/XCFramework
+          zip -r SkeletonViewStatic.xcframework.zip SkeletonViewStatic.xcframework
+          zip -r SkeletonViewDynamic.xcframework.zip SkeletonViewDynamic.xcframework
+
+      - name: Upload XCFrameworks as Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: XCFrameworks-Zip
+          path: build/XCFramework/*.xcframework.zip
+
+  release_version:
+    name: Release Version
+    needs: create-xcframework
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download XCFrameworks ZIP
+        uses: actions/download-artifact@v3
+        with:
+          name: XCFrameworks-Zip
 
       - name: Publish release
         id: publish_release
-        uses: release-drafter/release-drafter@v5
+        uses: release-drafter/release-drafter@v6
         with:
           publish: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update podspec
+      - name: Publish XCFrameworks
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.publish_release.outputs.tag_name }}
+          files: |
+            SkeletonViewDynamic.xcframework.zip
+            SkeletonViewStatic.xcframework.zip
+
+      - name: Update version in podspec
         run: fastlane bump_version next_version:${{ steps.publish_release.outputs.tag_name }}
 
       - name: Commit changes
@@ -26,7 +178,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to Cocoapods
+      - name: Deploy to CocoaPods
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
         run: |
