@@ -5,27 +5,20 @@ on:
     branches: [main]
     types: [opened, reoneped, edited, synchronized]
 
-#  workflow_dispatch:
-#    inputs:
-#      commit hash:
-#        description: "Commit hash"
-#        required: true
-#        default: ""
-
 jobs:
   lint:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2 
+      - uses: actions/checkout@v3 
       - name: Run SwiftLint
         run: swiftlint lint --reporter github-actions-logging
 
   danger: 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Danger
-        uses: docker://frmeloni/danger-swift-with-swiftlint:1.3.1
+        uses: docker://frmeloni/danger-swift-with-swiftlint:3.15.0
         with:
             args: --failOnErrors --verbose
         env:
