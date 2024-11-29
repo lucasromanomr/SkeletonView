@@ -16,4 +16,14 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/Juanpe/SkeletonView.git", :tag => s.version.to_s }
   s.source_files  = "SkeletonViewCore/Sources/**/*.{swift,h}"
   s.vendored_frameworks = "SkeletonView.xcframework"
+
+  # Subspec para o framework estático
+  s.subspec "Static" do |sp|
+    sp.vendored_frameworks = "StaticXCFramework.xcframework"
+  end
+
+  # Subspec para o framework dinâmico
+  s.subspec "Dynamic" do |sp|
+    sp.vendored_frameworks = "DynamicXCFramework.xcframework"
+  end
 end
