@@ -22,10 +22,15 @@ public extension CALayer {
         // swiftlint:disable:next force_unwrapping
         pulseAnimation.toValue = UIColor(cgColor: backgroundColor!).complementaryColor.cgColor
         pulseAnimation.duration = 1
-        pulseAnimation.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
         pulseAnimation.autoreverses = true
         pulseAnimation.repeatCount = .infinity
         pulseAnimation.isRemovedOnCompletion = false
+
+        if #available(iOS 12.0, *) {
+            pulseAnimation.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
+        } else {
+            pulseAnimation.timingFunction = CAMediaTimingFunction(controlPoints: 0.42, 0.0, 0.58, 1.0)
+        }
         return pulseAnimation
     }
     
