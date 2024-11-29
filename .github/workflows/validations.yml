@@ -6,18 +6,14 @@ on:
     types: [opened, reoneped, edited, synchronized]
 
 jobs:
-  SwiftLint:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - name: GitHub Action for SwiftLint (Only files changed in the PR)
+      - name: GitHub Action for SwiftLint with --strict
         uses: norio-nomura/action-swiftlint@3.2.1
-        env:
-          DIFF_BASE: ${{ github.base_ref }}
-      - name: GitHub Action for SwiftLint with --reporter
-        uses: norio-nomura/action-swiftlint@3.2.1
-        args: --reporter github-actions-logging
-  Danger:
+
+  danger:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
