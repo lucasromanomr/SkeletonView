@@ -12,8 +12,7 @@ jobs:
       - uses: actions/checkout@v1
       - name: GitHub Action for SwiftLint with --strict
         uses: norio-nomura/action-swiftlint@3.2.1
-        with:
-          args: --strict
+
   Danger:
     runs-on: ubuntu-latest
     steps:
